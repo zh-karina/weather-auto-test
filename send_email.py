@@ -9,25 +9,15 @@ from datetime import datetime
 
 # ==================== 配置 ====================
 SMTP_SERVER = "smtp.163.com"
-SMTP_PORT = 465  # SSL
+SMTP_PORT = 465
 SENDER_EMAIL = "13632044480@163.com"
-SENDER_PASSWORD = "ADezFuMt7MhaUxa9"  # ← 换成你的16位授权码
-RECEIVER_EMAIL = "3084714386@qq.com"  # 接收报告的邮箱
+SENDER_PASSWORD = "ADezFuMt7MhaUxa9"
+RECEIVER_EMAIL = "3084714386@qq.com"
 
 
 def send_email(build_status, build_url, build_number, report_path=None):
-    """
-    发送邮件
-    :param build_status: 构建状态 (SUCCESS / FAILURE)
-    :param build_url: Jenkins 构建地址
-    :param build_number: 构建编号
-    :param report_path: 测试报告路径（可选）
-    """
-    
-    # 邮件标题
     subject = f"构建结果: {build_status} - weather-auto-test - #{build_number}"
     
-    # 邮件正文（HTML格式）
     body = f"""
     <html>
     <body>
@@ -43,16 +33,12 @@ def send_email(build_status, build_url, build_number, report_path=None):
     </html>
     """
     
-    # 创建邮件对象
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
     msg["To"] = RECEIVER_EMAIL
     msg["Subject"] = subject
-    
-    # 添加正文
     msg.attach(MIMEText(body, "html", "utf-8"))
     
-    # 如果有报告文件，作为附件添加
     if report_path and os.path.exists(report_path):
         with open(report_path, "rb") as f:
             attachment = MIMEBase("application", "octet-stream")
@@ -65,7 +51,6 @@ def send_email(build_status, build_url, build_number, report_path=None):
             msg.attach(attachment)
             print("[INFO] 已添加附件: " + report_path)
     
-    # 发送邮件
     try:
         print("[INFO] 正在发送邮件到 " + RECEIVER_EMAIL + "...")
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
@@ -79,10 +64,8 @@ def send_email(build_status, build_url, build_number, report_path=None):
 
 
 if __name__ == "__main__":
-    # 从命令行参数获取构建信息
     build_status = sys.argv[1] if len(sys.argv) > 1 else "SUCCESS"
     build_url = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:8080"
     build_number = sys.argv[3] if len(sys.argv) > 3 else "0"
     report_path = sys.argv[4] if len(sys.argv) > 4 else None
-    
     send_email(build_status, build_url, build_number, report_path)
