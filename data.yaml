@@ -1,0 +1,23 @@
+# 测试数据
+test_cities:
+  - city: London
+    country: GB
+    expected_temp_min: -5
+  - city: Beijing
+    country: CN
+    expected_temp_min: -15
+  - city: Tokyo
+    country: JP
+    expected_temp_min: -5
+  - city: Moscow
+    country: RU
+    expected_temp_min: -20
+  - city: Sydney
+    country: AU
+    expected_temp_min: 0
+  - city: Paris
+    country: FR
+    expected_temp_min: -5
+  - city: New York
+    country: US
+    expected_temp_min: -10

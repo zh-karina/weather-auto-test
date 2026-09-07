@@ -1,0 +1,12 @@
+# 全局配置
+api:
+  base_url: https://api.openweathermap.org/data/2.5
+  timeout: 10
+  units: metric
+
+report:
+  html_dir: reports/html
+  log_dir: reports/logs
+
+test:
+  invalid_city: ThisCityDoesNotExist12345
