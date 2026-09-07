@@ -8,11 +8,10 @@ import sys
 from datetime import datetime
 
 # ==================== 配置 ====================
-SMTP_SERVER = "smtp.qq.com"
+SMTP_SERVER = "smtp.163.com"
 SMTP_PORT = 465  # SSL
-SENDER_EMAIL = "3084714386@qq.com"
-SENDER_PASSWORD = "anyamkciofdsdedd"  # ← 换成你的16位授权码
-
+SENDER_EMAIL = "13632044480@163.com"
+SENDER_PASSWORD = "ADezFuMt7MhaUxa9"  # ← 换成你的16位授权码
 RECEIVER_EMAIL = "3084714386@qq.com"  # 接收报告的邮箱
 
 
