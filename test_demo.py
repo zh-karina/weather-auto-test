@@ -1,4 +1,5 @@
 import requests
+import logging
 import time
 import os
 from datetime import datetime
@@ -8,6 +9,16 @@ import pytest
 
 # ==================== 获取当前脚本所在目录 ====================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ==================== 强制创建目录（使用绝对路径） ====================
+LOG_DIR = os.path.join(BASE_DIR, "reports", "logs")
+HTML_DIR = os.path.join(BASE_DIR, "reports", "html")
+
+# 确保目录存在
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
+if not os.path.exists(HTML_DIR):
+    os.makedirs(HTML_DIR)
 
 # ==================== 加载配置 ====================
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -20,16 +31,12 @@ with open(os.path.join(BASE_DIR, "config.yaml"), "r", encoding="utf-8") as f:
 with open(os.path.join(BASE_DIR, "data.yaml"), "r", encoding="utf-8") as f:
     TEST_DATA = yaml.safe_load(f)["test_cities"]
 
-# ==================== 日志文件直接放在当前目录（不创建子目录） ====================
-LOG_FILE = os.path.join(BASE_DIR, f"test_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-HTML_DIR = os.path.join(BASE_DIR, "reports", "html")
+# ==================== 日志文件路径 ====================
+LOG_FILE = os.path.join(LOG_DIR, f"test_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
-# 只创建 HTML 目录
-if not os.path.exists(HTML_DIR):
-    os.makedirs(HTML_DIR)
-
-# ==================== 自定义日志函数 ====================
+# ==================== 自定义日志函数（同时输出到控制台和文件） ====================
 def log_info(msg):
+    """输出 INFO 级别日志"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{timestamp} - INFO - {msg}"
     print(line)
@@ -37,6 +44,7 @@ def log_info(msg):
         f.write(line + "\n")
 
 def log_error(msg):
+    """输出 ERROR 级别日志"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{timestamp} - ERROR - {msg}"
     print(line)
@@ -74,7 +82,8 @@ def test_weather_api():
                 "units": units
             }
             start_time = time.time()
-            response = requests.get(url, params=params, timeout=timeout)
+            # ===== 添加 verify=False 跳过 SSL 验证 =====
+            response = requests.get(url, params=params, timeout=timeout, verify=False)
             elapsed = round((time.time() - start_time) * 1000)
             
             log_info(f"   状态码：{response.status_code}，耗时：{elapsed}ms")
@@ -153,7 +162,8 @@ def test_weather_api_invalid_city():
         "units": CONFIG["api"]["units"]
     }
     
-    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"])
+    # ===== 添加 verify=False 跳过 SSL 验证 =====
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
     log_info(f"   状态码：{response.status_code}")
     
     assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
