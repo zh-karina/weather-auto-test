@@ -7,11 +7,12 @@ import os
 import sys
 from datetime import datetime
 
-# ==================== 配置 ====================
+# ==================== 配置（163邮箱 + SSL） ====================
 SMTP_SERVER = "smtp.163.com"
-SMTP_PORT = 465
+SMTP_PORT = 465  # SSL
 SENDER_EMAIL = "13632044480@163.com"
 SENDER_PASSWORD = "ADezFuMt7MhaUxa9"
+
 RECEIVER_EMAIL = "3084714386@qq.com"
 
 
