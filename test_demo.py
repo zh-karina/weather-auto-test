@@ -9,6 +9,30 @@ import yaml
 from dotenv import load_dotenv
 import pytest
 
+# ==================== 请求重试机制 ====================
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+def create_session():
+    """创建一个带重试机制的 requests.Session"""
+    session = requests.Session()
+    retries = Retry(
+        total=3,                      # 总共重试 3 次
+        connect=3,                    # 连接失败重试 3 次
+        read=3,                       # 读取超时重试 3 次
+        backoff_factor=1,             # 重试间隔：1s, 2s, 4s
+        status_forcelist=[500, 502, 503, 504],  # 这些状态码才重试
+        allowed_methods=["GET"]       # 只对 GET 请求重试
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+# 全局 session（复用连接，带重试）
+SESSION = create_session()
+
+
 # ==================== 获取当前脚本所在目录 ====================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -86,8 +110,8 @@ def test_weather_api():
                 "units": units
             }
             start_time = time.time()
-            # ===== 启用 SSL 证书验证 =====
-            response = requests.get(url, params=params, timeout=timeout, verify=certifi.where())
+            # ===== 启用 SSL 验证 + 重试机制 =====
+            response = SESSION.get(url, params=params, timeout=timeout, verify=certifi.where())
             elapsed = round((time.time() - start_time) * 1000)
             
             log_info(f"   状态码：{response.status_code}，耗时：{elapsed}ms")
@@ -168,8 +192,8 @@ def test_weather_api_invalid_city():
         "units": CONFIG["api"]["units"]
     }
     
-    # ===== 启用 SSL 证书验证 =====
-    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=certifi.where())
+    # ===== 启用 SSL 验证 + 重试机制 =====
+    response = SESSION.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=certifi.where())
     log_info(f"   状态码：{response.status_code}")
     
     assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
