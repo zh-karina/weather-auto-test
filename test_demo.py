@@ -1,7 +1,9 @@
+import allure
 import requests
 import logging
 import time
 import os
+import certifi
 from datetime import datetime
 import yaml
 from dotenv import load_dotenv
@@ -51,7 +53,9 @@ def log_error(msg):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
-
+@allure.feature("天气接口")
+@allure.story("查询城市天气")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_weather_api():
     """测试：调用 OpenWeather 天气接口，检查返回结果"""
     
@@ -82,8 +86,8 @@ def test_weather_api():
                 "units": units
             }
             start_time = time.time()
-            # ===== 添加 verify=False 跳过 SSL 验证 =====
-            response = requests.get(url, params=params, timeout=timeout, verify=False)
+            # ===== 启用 SSL 证书验证 =====
+            response = requests.get(url, params=params, timeout=timeout, verify=certifi.where())
             elapsed = round((time.time() - start_time) * 1000)
             
             log_info(f"   状态码：{response.status_code}，耗时：{elapsed}ms")
@@ -146,7 +150,9 @@ def test_weather_api():
     if failed > 0:
         pytest.fail(f"有 {failed} 个用例失败")
 
-
+@allure.feature("天气接口")
+@allure.story("查询无效城市")
+@allure.severity(allure.severity_level.NORMAL)
 def test_weather_api_invalid_city():
     """测试：查询不存在的城市，应该返回 404"""
     
@@ -162,8 +168,8 @@ def test_weather_api_invalid_city():
         "units": CONFIG["api"]["units"]
     }
     
-    # ===== 添加 verify=False 跳过 SSL 验证 =====
-    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    # ===== 启用 SSL 证书验证 =====
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=certifi.where())
     log_info(f"   状态码：{response.status_code}")
     
     assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
