@@ -1,37 +1,12 @@
-import allure
 import requests
 import logging
 import time
 import os
-import certifi
 from datetime import datetime
 import yaml
 from dotenv import load_dotenv
 import pytest
-
-# ==================== 请求重试机制 ====================
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-def create_session():
-    """创建一个带重试机制的 requests.Session"""
-    session = requests.Session()
-    retries = Retry(
-        total=3,                      # 总共重试 3 次
-        connect=3,                    # 连接失败重试 3 次
-        read=3,                       # 读取超时重试 3 次
-        backoff_factor=1,             # 重试间隔：1s, 2s, 4s
-        status_forcelist=[500, 502, 503, 504],  # 这些状态码才重试
-        allowed_methods=["GET"]       # 只对 GET 请求重试
-    )
-    adapter = HTTPAdapter(max_retries=retries)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
-
-# 全局 session（复用连接，带重试）
-SESSION = create_session()
-
+import allure
 
 # ==================== 获取当前脚本所在目录 ====================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -60,7 +35,7 @@ with open(os.path.join(BASE_DIR, "data.yaml"), "r", encoding="utf-8") as f:
 # ==================== 日志文件路径 ====================
 LOG_FILE = os.path.join(LOG_DIR, f"test_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
-# ==================== 自定义日志函数（同时输出到控制台和文件） ====================
+# ==================== 自定义日志函数 ====================
 def log_info(msg):
     """输出 INFO 级别日志"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -76,6 +51,9 @@ def log_error(msg):
     print(line)
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+
+# ==================== 测试用例 ====================
 
 @allure.feature("天气接口")
 @allure.story("查询城市天气")
@@ -110,8 +88,7 @@ def test_weather_api():
                 "units": units
             }
             start_time = time.time()
-            # ===== 启用 SSL 验证 + 重试机制 =====
-            response = SESSION.get(url, params=params, timeout=timeout, verify=certifi.where())
+            response = requests.get(url, params=params, timeout=timeout, verify=False)
             elapsed = round((time.time() - start_time) * 1000)
             
             log_info(f"   状态码：{response.status_code}，耗时：{elapsed}ms")
@@ -174,6 +151,7 @@ def test_weather_api():
     if failed > 0:
         pytest.fail(f"有 {failed} 个用例失败")
 
+
 @allure.feature("天气接口")
 @allure.story("查询无效城市")
 @allure.severity(allure.severity_level.NORMAL)
@@ -192,8 +170,7 @@ def test_weather_api_invalid_city():
         "units": CONFIG["api"]["units"]
     }
     
-    # ===== 启用 SSL 验证 + 重试机制 =====
-    response = SESSION.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=certifi.where())
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
     log_info(f"   状态码：{response.status_code}")
     
     assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
@@ -204,6 +181,166 @@ def test_weather_api_invalid_city():
     
     log_info("   ✅ 无效城市测试通过！")
 
+
+@allure.feature("天气接口")
+@allure.story("空城市名查询")
+@allure.severity(allure.severity_level.NORMAL)
+def test_weather_empty_city():
+    """测试：查询空城市名，应该返回错误"""
+    
+    log_info("\n" + "=" * 60)
+    log_info("执行异常场景测试：空城市名")
+    
+    url = f"{BASE_URL}/weather"
+    params = {
+        "q": "",
+        "appid": API_KEY,
+        "units": CONFIG["api"]["units"]
+    }
+    
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    log_info(f"   状态码：{response.status_code}")
+    
+    assert response.status_code in [400, 404], f"期望 400 或 404，实际 {response.status_code}"
+    
+    log_info("   ✅ 空城市名测试通过！")
+
+
+@allure.feature("天气接口")
+@allure.story("特殊字符查询")
+@allure.severity(allure.severity_level.NORMAL)
+def test_weather_special_chars():
+    """测试：查询包含特殊字符的城市名，应该返回错误"""
+    
+    log_info("\n" + "=" * 60)
+    log_info("执行异常场景测试：特殊字符")
+    
+    url = f"{BASE_URL}/weather"
+    params = {
+        "q": "!@#$%^&*()",
+        "appid": API_KEY,
+        "units": CONFIG["api"]["units"]
+    }
+    
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    log_info(f"   状态码：{response.status_code}")
+    
+    assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
+    
+    log_info("   ✅ 特殊字符测试通过！")
+
+
+@allure.feature("天气接口")
+@allure.story("缺少API Key")
+@allure.severity(allure.severity_level.CRITICAL)
+def test_weather_missing_api_key():
+    """测试：不传 API Key，应该返回 401"""
+    
+    log_info("\n" + "=" * 60)
+    log_info("执行异常场景测试：缺少 API Key")
+    
+    url = f"{BASE_URL}/weather"
+    params = {
+        "q": "London,GB",
+        "units": CONFIG["api"]["units"]
+    }
+    
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    log_info(f"   状态码：{response.status_code}")
+    
+    assert response.status_code == 401, f"期望 401，实际 {response.status_code}"
+    
+    log_info("   ✅ 缺少 API Key 测试通过！")
+
+
+@allure.feature("天气接口")
+@allure.story("温度合理性校验")
+@allure.severity(allure.severity_level.NORMAL)
+def test_weather_temperature_range():
+    """测试：检查返回的温度是否在合理范围内"""
+    
+    log_info("\n" + "=" * 60)
+    log_info("执行业务逻辑测试：温度合理性")
+    
+    url = f"{BASE_URL}/weather"
+    params = {
+        "q": "London,GB",
+        "appid": API_KEY,
+        "units": CONFIG["api"]["units"]
+    }
+    
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    assert response.status_code == 200
+    
+    data = response.json()
+    temp = data["main"]["temp"]
+    
+    assert -90 <= temp <= 60, f"温度超出合理范围：{temp}°C"
+    
+    log_info(f"   ✅ 温度 {temp}°C 在合理范围内")
+
+
+@allure.feature("天气接口")
+@allure.story("天气描述非空")
+@allure.severity(allure.severity_level.MINOR)
+def test_weather_description_not_empty():
+    """测试：检查返回的天气描述是否非空"""
+    
+    log_info("\n" + "=" * 60)
+    log_info("执行业务逻辑测试：天气描述非空")
+    
+    url = f"{BASE_URL}/weather"
+    params = {
+        "q": "Beijing,CN",
+        "appid": API_KEY,
+        "units": CONFIG["api"]["units"]
+    }
+    
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    assert response.status_code == 200
+    
+    data = response.json()
+    weather_desc = data["weather"][0]["description"]
+    
+    assert weather_desc != "", "天气描述为空"
+    assert len(weather_desc) > 0, "天气描述长度不够"
+    
+    log_info(f"   ✅ 天气描述：{weather_desc}")
+
+
+@allure.feature("天气接口")
+@allure.story("返回字段完整性")
+@allure.severity(allure.severity_level.NORMAL)
+def test_weather_response_fields():
+    """测试：检查返回的 JSON 是否包含必要字段"""
+    
+    log_info("\n" + "=" * 60)
+    log_info("执行业务逻辑测试：返回字段完整性")
+    
+    url = f"{BASE_URL}/weather"
+    params = {
+        "q": "Tokyo,JP",
+        "appid": API_KEY,
+        "units": CONFIG["api"]["units"]
+    }
+    
+    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+    assert response.status_code == 200
+    
+    data = response.json()
+    
+    required_fields = ["name", "main", "weather", "sys", "wind"]
+    for field in required_fields:
+        assert field in data, f"缺少必要字段：{field}"
+    
+    assert "temp" in data["main"], "main 中缺少 temp"
+    assert "humidity" in data["main"], "main 中缺少 humidity"
+    assert "country" in data["sys"], "sys 中缺少 country"
+    
+    log_info("   ✅ 所有必要字段都存在")
+
+
+# ==================== HTML 报告生成 ====================
 
 def generate_html_report(results, total, passed, failed):
     """生成漂亮的 HTML 测试报告"""
