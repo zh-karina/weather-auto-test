@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+import sys
+import io
+
+# ==================== 强制设置输出编码为 UTF-8 ====================
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import requests
 import logging
 import time
@@ -12,11 +19,10 @@ import allure
 # ==================== 获取当前脚本所在目录 ====================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ==================== 强制创建目录（使用绝对路径） ====================
+# ==================== 强制创建目录 ====================
 LOG_DIR = os.path.join(BASE_DIR, "reports", "logs")
 HTML_DIR = os.path.join(BASE_DIR, "reports", "html")
 
-# 确保目录存在
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 if not os.path.exists(HTML_DIR):
@@ -25,7 +31,6 @@ if not os.path.exists(HTML_DIR):
 # ==================== 加载配置 ====================
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-# 从环境变量读取 API Key（不写在代码里，避免泄露）
 API_KEY = os.getenv("API_KEY")
 BASE_URL = os.getenv("BASE_URL", "https://api.openweathermap.org/data/2.5")
 
@@ -39,9 +44,8 @@ with open(os.path.join(BASE_DIR, "data.yaml"), "r", encoding="utf-8") as f:
 LOG_FILE = os.path.join(LOG_DIR, f"test_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
 
-# ==================== 自定义日志函数 ====================
+# ==================== 自定义日志函数（纯文本，避免编码问题） ====================
 def log_info(msg):
-    """输出 INFO 级别日志"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{timestamp} - INFO - {msg}"
     print(line)
@@ -50,7 +54,6 @@ def log_info(msg):
 
 
 def log_error(msg):
-    """输出 ERROR 级别日志"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{timestamp} - ERROR - {msg}"
     print(line)
@@ -78,7 +81,7 @@ def test_weather_each_city(city, country):
     timeout = CONFIG["api"]["timeout"]
     units = CONFIG["api"]["units"]
 
-    log_info(f"\n测试城市：{city}, {country}")
+    log_info(f"测试城市：{city}, {country}")
 
     params = {
         "q": f"{city},{country}",
@@ -89,7 +92,7 @@ def test_weather_each_city(city, country):
     response = requests.get(url, params=params, timeout=timeout, verify=False)
     elapsed = round((time.time() - start_time) * 1000)
 
-    log_info(f"   状态码：{response.status_code}，耗时：{elapsed}ms")
+    log_info(f"状态码：{response.status_code}，耗时：{elapsed}ms")
 
     assert response.status_code == 200, f"状态码异常：{response.status_code}"
 
@@ -101,7 +104,7 @@ def test_weather_each_city(city, country):
     humidity = data["main"]["humidity"]
     weather_desc = data["weather"][0]["description"]
 
-    log_info(f"   ✅ {city} 测试通过！温度：{current_temp}°C，湿度：{humidity}%，天气：{weather_desc}")
+    log_info(f"[PASS] {city} 测试通过！温度：{current_temp}°C，湿度：{humidity}%，天气：{weather_desc}")
 
 
 @allure.feature("天气接口")
@@ -109,7 +112,7 @@ def test_weather_each_city(city, country):
 @allure.severity(allure.severity_level.NORMAL)
 def test_weather_api_invalid_city():
     """测试：查询不存在的城市，应该返回 404"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行异常场景测试：无效城市")
 
     url = f"{BASE_URL}/weather"
@@ -122,7 +125,7 @@ def test_weather_api_invalid_city():
     }
 
     response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
-    log_info(f"   状态码：{response.status_code}")
+    log_info(f"状态码：{response.status_code}")
 
     assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
 
@@ -130,7 +133,7 @@ def test_weather_api_invalid_city():
     assert data["cod"] == "404", f"期望 cod=404，实际 {data['cod']}"
     assert "city not found" in data["message"].lower(), f"错误信息不正确：{data['message']}"
 
-    log_info("   ✅ 无效城市测试通过！")
+    log_info("[PASS] 无效城市测试通过！")
 
 
 @allure.feature("天气接口")
@@ -138,7 +141,7 @@ def test_weather_api_invalid_city():
 @allure.severity(allure.severity_level.NORMAL)
 def test_weather_empty_city():
     """测试：查询空城市名，应该返回错误"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行异常场景测试：空城市名")
 
     url = f"{BASE_URL}/weather"
@@ -149,11 +152,11 @@ def test_weather_empty_city():
     }
 
     response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
-    log_info(f"   状态码：{response.status_code}")
+    log_info(f"状态码：{response.status_code}")
 
     assert response.status_code in [400, 404], f"期望 400 或 404，实际 {response.status_code}"
 
-    log_info("   ✅ 空城市名测试通过！")
+    log_info("[PASS] 空城市名测试通过！")
 
 
 @allure.feature("天气接口")
@@ -161,7 +164,7 @@ def test_weather_empty_city():
 @allure.severity(allure.severity_level.NORMAL)
 def test_weather_special_chars():
     """测试：查询包含特殊字符的城市名，应该返回错误"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行异常场景测试：特殊字符")
 
     url = f"{BASE_URL}/weather"
@@ -172,11 +175,11 @@ def test_weather_special_chars():
     }
 
     response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
-    log_info(f"   状态码：{response.status_code}")
+    log_info(f"状态码：{response.status_code}")
 
     assert response.status_code == 404, f"期望 404，实际 {response.status_code}"
 
-    log_info("   ✅ 特殊字符测试通过！")
+    log_info("[PASS] 特殊字符测试通过！")
 
 
 @allure.feature("天气接口")
@@ -184,7 +187,7 @@ def test_weather_special_chars():
 @allure.severity(allure.severity_level.CRITICAL)
 def test_weather_missing_api_key():
     """测试：不传 API Key，应该返回 401"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行异常场景测试：缺少 API Key")
 
     url = f"{BASE_URL}/weather"
@@ -194,11 +197,11 @@ def test_weather_missing_api_key():
     }
 
     response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
-    log_info(f"   状态码：{response.status_code}")
+    log_info(f"状态码：{response.status_code}")
 
     assert response.status_code == 401, f"期望 401，实际 {response.status_code}"
 
-    log_info("   ✅ 缺少 API Key 测试通过！")
+    log_info("[PASS] 缺少 API Key 测试通过！")
 
 
 @allure.feature("天气接口")
@@ -206,7 +209,7 @@ def test_weather_missing_api_key():
 @allure.severity(allure.severity_level.NORMAL)
 def test_weather_temperature_range():
     """测试：检查返回的温度是否在合理范围内"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行业务逻辑测试：温度合理性")
 
     url = f"{BASE_URL}/weather"
@@ -224,7 +227,7 @@ def test_weather_temperature_range():
 
     assert -90 <= temp <= 60, f"温度超出合理范围：{temp}°C"
 
-    log_info(f"   ✅ 温度 {temp}°C 在合理范围内")
+    log_info(f"[PASS] 温度 {temp}°C 在合理范围内")
 
 
 @allure.feature("天气接口")
@@ -232,7 +235,7 @@ def test_weather_temperature_range():
 @allure.severity(allure.severity_level.MINOR)
 def test_weather_description_not_empty():
     """测试：检查返回的天气描述是否非空"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行业务逻辑测试：天气描述非空")
 
     url = f"{BASE_URL}/weather"
@@ -251,7 +254,7 @@ def test_weather_description_not_empty():
     assert weather_desc != "", "天气描述为空"
     assert len(weather_desc) > 0, "天气描述长度不够"
 
-    log_info(f"   ✅ 天气描述：{weather_desc}")
+    log_info(f"[PASS] 天气描述：{weather_desc}")
 
 
 @allure.feature("天气接口")
@@ -259,7 +262,7 @@ def test_weather_description_not_empty():
 @allure.severity(allure.severity_level.NORMAL)
 def test_weather_response_fields():
     """测试：检查返回的 JSON 是否包含必要字段"""
-    log_info("\n" + "=" * 60)
+    log_info("=" * 60)
     log_info("执行业务逻辑测试：返回字段完整性")
 
     url = f"{BASE_URL}/weather"
@@ -282,7 +285,7 @@ def test_weather_response_fields():
     assert "humidity" in data["main"], "main 中缺少 humidity"
     assert "country" in data["sys"], "sys 中缺少 country"
 
-    log_info("   ✅ 所有必要字段都存在")
+    log_info("[PASS] 所有必要字段都存在")
 
 
 # ==================== 生成 HTML 报告 ====================
