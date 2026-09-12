@@ -1,148 +1,141 @@
 # -*- coding: utf-8 -*-
-import smtplib
-import traceback
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
+"""
+邮件发送脚本
+用法：python send_email.py <status> <build_url> <build_number> <report_path>
+"""
+
 import os
 import sys
+import io
+import smtplib
+import argparse
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+from email.header import Header
 from datetime import datetime
 
-# ==================== 配置（163邮箱 + SSL） ====================
-SMTP_SERVER = "smtp.163.com"
-SMTP_PORT = 465  # SSL
-SENDER_EMAIL = "13632044480@163.com"
-SENDER_PASSWORD = "ADezFuMt7MhaUxa9"
+# ============ 解决 Windows 控制台中文乱码 ============
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-RECEIVER_EMAIL = "3084714386@qq.com"
+# ============ SMTP 配置（QQ 邮箱） ============
+SMTP_SERVER = "smtp.qq.com"
+SMTP_PORT = 465
+SMTP_USER = "3084714386@qq.com"
+SMTP_PASSWORD = "anyamkciofdsdedd"
+MAIL_TO = "3084714386@qq.com"
 
 
-def send_email(build_status, build_url, build_number, report_path=None):
-    subject = f"构建结果: {build_status} - weather-auto-test - #{build_number}"
-    
+def log_info(msg):
+    print(f"[INFO] {msg}")
+
+
+def log_error(msg):
+    print(f"[ERROR] {msg}")
+
+
+def send_email(status, build_url, build_number, report_path):
+    """发送测试报告邮件"""
+
+    log_info(f"参数解析: status={status}, url={build_url}, number={build_number}, report={report_path}")
+
+    if not os.path.exists(report_path):
+        log_error(f"报告文件不存在：{report_path}")
+        return False
+
+    log_info(f"已添加附件：{report_path}")
+
+    subject = f"天气接口自动化测试报告 - 构建 #{build_number}"
+
     body = f"""
     <html>
-    <body>
-    <h2>Jenkins 构建报告</h2>
-    <p><b>项目名称：</b>weather-auto-test</p>
-    <p><b>构建编号：</b>#{build_number}</p>
-    <p><b>构建状态：</b> <span style="color:{'green' if build_status == 'SUCCESS' else 'red'};font-weight:bold;">{build_status}</span></p>
-    <p><b>执行时间：</b>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-    <p><b>查看详情：</b><a href="{build_url}">{build_url}</a></p>
-    <hr>
-    <p style="color:gray;font-size:12px;">Jenkins 自动发送，请勿回复</p>
+    <body style="font-family: Arial, sans-serif;">
+        <p>您好，</p>
+        <p>这是 Jenkins 自动发送的测试报告，构建信息如下：</p>
+        <table style="border-collapse: collapse;">
+            <tr>
+                <td style="padding: 6px; border: 1px solid #ddd;">构建编号</td>
+                <td style="padding: 6px; border: 1px solid #ddd;">#{build_number}</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px; border: 1px solid #ddd;">构建状态</td>
+                <td style="padding: 6px; border: 1px solid #ddd;">{status}</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px; border: 1px solid #ddd;">构建时间</td>
+                <td style="padding: 6px; border: 1px solid #ddd;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px; border: 1px solid #ddd;">构建链接</td>
+                <td style="padding: 6px; border: 1px solid #ddd;">
+                    <a href="{build_url}">{build_url}</a>
+                </td>
+            </tr>
+        </table>
+        <p>详细测试报告请查看附件 report.html。</p>
+        <p>此邮件由系统自动发送，请勿回复。</p>
     </body>
     </html>
     """
-    
+
+    # ===== 构建邮件（From 用纯邮箱地址，避免 QQ 邮箱报错） =====
     msg = MIMEMultipart()
-    msg["From"] = SENDER_EMAIL
-    msg["To"] = RECEIVER_EMAIL
-    msg["Subject"] = subject
+    msg["From"] = SMTP_USER
+    msg["To"] = MAIL_TO
+    msg["Subject"] = Header(subject, "utf-8")
     msg.attach(MIMEText(body, "html", "utf-8"))
-    
-    # ===== 附件处理（单独 try，附件失败不影响邮件正文发送） =====
-    if report_path and os.path.exists(report_path):
-        try:
-            with open(report_path, "rb") as f:
-                attachment = MIMEBase("application", "octet-stream")
-                attachment.set_payload(f.read())
-                encoders.encode_base64(attachment)
-                attachment.add_header(
-                    "Content-Disposition",
-                    f"attachment; filename={os.path.basename(report_path)}"
-                )
-                msg.attach(attachment)
-                print("[INFO] 已添加附件: " + report_path)
-        except Exception as e:
-            print("[WARN] 附件添加失败，仅发送正文: " + str(e))
-    elif report_path:
-        print("[WARN] 报告文件不存在，跳过附件: " + str(report_path))
-    
-    # ===== 发送邮件 =====
+
+    # ===== 添加附件 =====
     try:
-        print("[INFO] 正在发送邮件到 " + RECEIVER_EMAIL + "...")
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
-        print("[SUCCESS] 邮件发送成功！")
-        return True
+        with open(report_path, "rb") as f:
+            attachment = MIMEApplication(f.read(), _subtype="html")
+            attachment.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=("utf-8", "", os.path.basename(report_path))
+            )
+            msg.attach(attachment)
     except Exception as e:
-        print("[ERROR] 邮件发送失败: " + str(e))
-        traceback.print_exc()
+        log_error(f"读取附件失败：{e}")
+        return False
+
+    # ===== 发送邮件 =====
+    log_info(f"正在发送邮件到 {MAIL_TO}...")
+    try:
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, [MAIL_TO], msg.as_string())
+        log_info("邮件发送成功！")
+        return True
+    except smtplib.SMTPAuthenticationError as e:
+        log_error(f"SMTP 认证失败（请检查授权码）：{e}")
+        return False
+    except smtplib.SMTPException as e:
+        log_error(f"SMTP 异常：{e}")
+        return False
+    except Exception as e:
+        log_error(f"邮件发送失败：{e}")
         return False
 
 
-def parse_args():
-    """
-    智能解析参数，兼容两种调用方式：
-
-    方式 1（Jenkins 当前用法，3 个参数）：
-        python send_email.py <build_url> <build_number> <report_path>
-        → 状态默认 SUCCESS
-
-    方式 2（4 个参数）：
-        python send_email.py <build_status> <build_url> <build_number> <report_path>
-    """
-    args = sys.argv[1:]  # 去掉脚本名
-
-    if len(args) >= 4:
-        # 4 个及以上参数：status, url, number, report_path
-        build_status = args[0]
-        build_url = args[1]
-        build_number = args[2]
-        report_path = args[3]
-    elif len(args) == 3:
-        # 3 个参数：url, number, report_path
-        build_status = "SUCCESS"
-        build_url = args[0]
-        build_number = args[1]
-        report_path = args[2]
-    elif len(args) == 2:
-        # 2 个参数：url, number
-        build_status = "SUCCESS"
-        build_url = args[0]
-        build_number = args[1]
-        report_path = None
-    elif len(args) == 1:
-        # 1 个参数：url
-        build_status = "SUCCESS"
-        build_url = args[0]
-        build_number = "0"
-        report_path = None
-    else:
-        # 无参数，全默认
-        build_status = "UNKNOWN"
-        build_url = "http://localhost:8080"
-        build_number = "0"
-        report_path = None
-
-    return build_status, build_url, build_number, report_path
-
-
 def main():
-    """
-    主入口：
-    - 智能解析命令行参数
-    - 调用 send_email
-    - 无论成功失败，退出码永远为 0，避免影响 Jenkins 构建结果
-    """
-    try:
-        build_status, build_url, build_number, report_path = parse_args()
+    parser = argparse.ArgumentParser(description="发送测试报告邮件")
+    parser.add_argument("status", help="构建状态：SUCCESS / FAILURE / UNSTABLE")
+    parser.add_argument("build_url", help="构建 URL")
+    parser.add_argument("build_number", help="构建编号")
+    parser.add_argument("report_path", help="HTML 报告路径")
 
-        print(f"[INFO] 参数解析: status={build_status}, url={build_url}, "
-              f"number={build_number}, report={report_path}")
+    args = parser.parse_args()
 
-        send_email(build_status, build_url, build_number, report_path)
+    success = send_email(
+        args.status,
+        args.build_url,
+        args.build_number,
+        args.report_path
+    )
 
-    except Exception as e:
-        # 兜底：任何异常都不应让 Jenkins 构建失败
-        print("[WARN] 邮件脚本执行异常（不影响构建）: " + str(e))
-        traceback.print_exc()
-
-    # 关键：始终返回 0，保证 Jenkins 构建状态不受邮件影响
-    sys.exit(0)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":
