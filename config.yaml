@@ -1,7 +1,6 @@
-# 全局配置
 api:
   base_url: https://api.openweathermap.org/data/2.5
-  timeout: 10
+  timeout: 30
   units: metric
 
 report:
