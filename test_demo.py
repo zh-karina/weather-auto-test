@@ -140,7 +140,7 @@ def test_weather_api_invalid_city():
 @allure.story("空城市名查询")
 @allure.severity(allure.severity_level.NORMAL)
 def test_weather_empty_city():
-    """测试：查询空城市名，应该返回错误"""
+    """测试：查询空城市名，应该返回错误（已加入网络重试机制）"""
     log_info("=" * 60)
     log_info("执行异常场景测试：空城市名")
 
@@ -151,12 +151,22 @@ def test_weather_empty_city():
         "units": CONFIG["api"]["units"]
     }
 
-    response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
-    log_info(f"状态码：{response.status_code}")
-
-    assert response.status_code in [400, 404], f"期望 400 或 404，实际 {response.status_code}"
-
-    log_info("[PASS] 空城市名测试通过！")
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, params=params, timeout=CONFIG["api"]["timeout"], verify=False)
+            log_info(f"状态码：{response.status_code}")
+            
+            assert response.status_code in [400, 404], f"期望 400 或 404，实际 {response.status_code}"
+            log_info("[PASS] 空城市名测试通过！")
+            return
+        except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+            if attempt < max_retries - 1:
+                log_info(f"网络异常，重试第 {attempt + 1} 次... 错误信息: {e}")
+                time.sleep(2)
+            else:
+                log_error(f"网络异常，已达到最大重试次数 ({max_retries}次)，测试失败。")
+                raise
 
 
 @allure.feature("天气接口")
@@ -288,26 +298,53 @@ def test_weather_response_fields():
     log_info("[PASS] 所有必要字段都存在")
 
 
-# ==================== 生成 HTML 报告 ====================
+# ==================== 生成 HTML 报告 (利用 pytest 钩子自动触发) ====================
 
-def generate_html_report(results, total, passed, failed):
+def generate_html_report(total, passed, failed):
     """生成漂亮的 HTML 测试报告"""
-    html_file = os.path.join(HTML_DIR, f"weather_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html")
+    html_file = os.path.join(HTML_DIR, "report.html")  # 固定名字，方便 Jenkins 发邮件引用
 
     html_content = f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <title>天气接口自动化测试报告</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; padding: 20px; }}
+        .pass {{ color: green; font-weight: bold; }}
+        .fail {{ color: red; font-weight: bold; }}
+    </style>
 </head>
 <body>
     <h1>天气接口自动化测试报告</h1>
-    <p>总计：{total}，通过：{passed}，失败：{failed}</p>
+    <p>生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    <hr>
+    <p>总计：{total}</p>
+    <p class="pass">通过：{passed}</p>
+    <p class="fail">失败：{failed}</p>
 </body>
 </html>
 '''
 
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html_content)
+    print(f"\n[HTML Report] 已生成: {html_file}")
 
-    return html_file
+
+def pytest_sessionfinish(session, exitstatus):
+    """pytest 运行结束时自动调用，用于生成 HTML 摘要报告"""
+    total = session.testscollected
+    passed = session.results.count(True) if hasattr(session, 'results') else 0
+    # 简单一点，直接从 stats 里取
+    failed = 0
+    passed = 0
+    for test_result in session.config.pluginmanager.get_plugin('terminalreporter').stats.values():
+        pass
+    
+    # 使用更稳妥的钩子方式统计
+    terminalreporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if terminalreporter:
+        passed = len(terminalreporter.stats.get('passed', []))
+        failed = len(terminalreporter.stats.get('failed', []))
+    
+    generate_html_report(total, passed, failed)
