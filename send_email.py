@@ -23,7 +23,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 SMTP_SERVER = "smtp.qq.com"
 SMTP_PORT = 465
 SMTP_USER = "3084714386@qq.com"
-SMTP_PASSWORD = "anyamkciofdsdedd"
+SMTP_PASSWORD = "qfmmdnvhoaxqdcie"
 MAIL_TO = "3084714386@qq.com"
 
 
